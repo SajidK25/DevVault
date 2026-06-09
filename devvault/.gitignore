@@ -1,0 +1,15 @@
+# Node
+node_modules/
+dist/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Vault data (never commit secrets or local DB)
+*.vault
+.devvault/
+
+# Editor / OS
+.DS_Store
+*.log

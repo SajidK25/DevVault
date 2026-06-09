@@ -1,0 +1,33 @@
+# ── Secrets / vault data (NEVER commit) ──
+CLAUDE.local.md
+devvault-PLAINTEXT.json
+*.vault
+*.db
+*.db-wal
+*.db-shm
+.devvault/
+**/backups/
+
+# ── Node ──
+node_modules/
+devvault/dist/
+*.local
+
+# ── Rust / Tauri ──
+devvault/src-tauri/target/
+devvault/src-tauri/gen/
+
+# ── Logs ──
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Editor / OS ──
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*~
+Thumbs.db
