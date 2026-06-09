@@ -161,7 +161,7 @@ _None._ (The literal `max-w-2xl max-h-full` on the form is replaced by `SIZE_CLA
 
 ## Task T1: Resizable entry modal via expand/restore presets
 
-> **Status:** not started
+> **Status:** done
 > **Effort:** s
 > **Priority:** medium
 > **Depends on:** None

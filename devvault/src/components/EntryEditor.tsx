@@ -12,6 +12,17 @@ interface Props {
   onSaved: () => void;
 }
 
+type Size = "normal" | "large" | "full";
+
+// Full literal class strings (NOT concatenated) so Tailwind's JIT scanner emits
+// them. `normal` matches the pre-resize modal exactly.
+const SIZE_CLASS: Record<Size, string> = {
+  normal: "w-full max-w-2xl max-h-full",
+  large: "w-full max-w-5xl max-h-full",
+  full: "w-full max-w-none h-full",
+};
+const SIZE_ORDER: Size[] = ["normal", "large", "full"];
+
 export default function EntryEditor({
   projectId,
   entryId,
@@ -24,6 +35,7 @@ export default function EntryEditor({
   const [notes, setNotes] = useState("");
   const [fields, setFields] = useState<Field[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [size, setSize] = useState<Size>("normal"); // resets each open (modal unmounts on close)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(entryId !== null);
@@ -76,19 +88,44 @@ export default function EntryEditor({
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/50 p-6">
       <form
         onSubmit={save}
-        className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl"
+        className={`flex flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl ${SIZE_CLASS[size]}`}
       >
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-5 py-3">
           <h2 className="font-semibold">
             {entryId === null ? "New entry" : "Edit entry"}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
+            {size !== "normal" && (
+              <button
+                type="button"
+                onClick={() => setSize("normal")}
+                title="Restore size"
+                className="rounded px-1 hover:text-slate-800 dark:hover:text-slate-200"
+              >
+                ⤡
+              </button>
+            )}
+            {size !== "full" && (
+              <button
+                type="button"
+                onClick={() =>
+                  setSize((s) => SIZE_ORDER[SIZE_ORDER.indexOf(s) + 1])
+                }
+                title="Enlarge"
+                className="rounded px-1 hover:text-slate-800 dark:hover:text-slate-200"
+              >
+                ⤢
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              title="Close"
+              className="rounded px-1 hover:text-slate-800 dark:hover:text-slate-200"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {loading ? (
