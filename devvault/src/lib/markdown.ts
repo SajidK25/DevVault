@@ -15,8 +15,10 @@ function inline(s: string): string {
     .replace(/`([^`]+)`/g, '<code class="rounded bg-slate-700 px-1">$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    // [text](url) -> text (we never make live links in an offline vault)
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
+    .replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      '<a class="note-link text-sky-400 underline cursor-pointer" data-url="$2">$1</a>'
+    );
 }
 
 export function renderMarkdown(src: string): string {
@@ -70,9 +72,22 @@ export function renderMarkdown(src: string): string {
 
     closeList();
     if (line.trim() === "") out.push("<br/>");
-    else out.push(`<p>${inline(line)}</p>`);
+    else out.push(`<p style="white-space:pre-wrap">${inline(line)}</p>`);
   }
   closeList();
   if (inCode) out.push("</code></pre>");
   return out.join("\n");
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[\\^$.|?*+(){}[\]]/g, "\\$&");
+}
+
+export function highlightHtml(html: string, query: string): string {
+  if (!query) return html;
+  const re = new RegExp(escapeRegex(query), "gi");
+  return html.replace(/(<[^>]*>)|([^<]+)/g, (_match, tag, text) => {
+    if (tag) return tag;
+    return text.replace(re, '<mark class="bg-yellow-400/40 text-inherit">$&</mark>');
+  });
 }

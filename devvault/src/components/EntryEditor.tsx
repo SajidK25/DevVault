@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { EntryType, Field } from "../types";
 import { ENTRY_TYPES } from "../types";
 import { createEntry, getEntry, updateEntry } from "../lib/ipc";
-import { renderMarkdown } from "../lib/markdown";
 import FieldRow from "./FieldRow";
+import NoteEditor from "./NoteEditor";
 
 interface Props {
   projectId: string;
@@ -13,6 +13,9 @@ interface Props {
 }
 
 type Size = "normal" | "large" | "full";
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+const AUTOSAVE_DEBOUNCE_MS = 900;
 
 // Full literal class strings (NOT concatenated) so Tailwind's JIT scanner emits
 // them. `normal` matches the pre-resize modal exactly.
@@ -34,11 +37,20 @@ export default function EntryEditor({
   const [tagsInput, setTagsInput] = useState("");
   const [notes, setNotes] = useState("");
   const [fields, setFields] = useState<Field[]>([]);
-  const [showPreview, setShowPreview] = useState(false);
   const [size, setSize] = useState<Size>("normal"); // resets each open (modal unmounts on close)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(entryId !== null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+
+  // Mutable id: starts as the prop, but flips from null -> real id once
+  // autosave creates a brand-new entry. A ref (not state) so the autosave
+  // effect below doesn't re-run just because the id changed.
+  const entryIdRef = useRef<string | null>(entryId);
+  // Guards against autosaving the very first render after `getEntry`
+  // populates state (that's a load, not an edit).
+  const skipNextAutosaveRef = useRef(entryId !== null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (entryId === null) return;
@@ -61,27 +73,60 @@ export default function EntryEditor({
       .filter(Boolean);
   }
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim()) {
-      setError("Title is required.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
+  /** Creates or updates the entry, tracking status. Used by both autosave and the explicit Save button. */
+  async function persist(): Promise<boolean> {
+    if (!title.trim()) return false;
+    setSaveStatus("saving");
     try {
       const tags = parseTags();
-      if (entryId === null) {
-        await createEntry(projectId, type, title.trim(), tags, notes, fields);
+      if (entryIdRef.current === null) {
+        const created = await createEntry(
+          projectId,
+          type,
+          title.trim(),
+          tags,
+          notes,
+          fields
+        );
+        entryIdRef.current = created.id;
       } else {
-        await updateEntry(entryId, type, title.trim(), tags, notes, fields);
+        await updateEntry(entryIdRef.current, type, title.trim(), tags, notes, fields);
       }
+      setError(null);
+      setSaveStatus("saved");
       onSaved();
-      onClose();
+      return true;
     } catch (err) {
       setError(String(err));
-      setBusy(false);
+      setSaveStatus("error");
+      return false;
     }
+  }
+
+  // Debounced autosave: fires ~900ms after the last edit to title/tags/notes/fields.
+  useEffect(() => {
+    if (loading) return;
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void persist();
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, type, title, tagsInput, notes, fields]);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    setBusy(true);
+    const ok = await persist();
+    setBusy(false);
+    if (ok) onClose();
   }
 
   return (
@@ -91,9 +136,22 @@ export default function EntryEditor({
         className={`flex flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl ${SIZE_CLASS[size]}`}
       >
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-5 py-3">
-          <h2 className="font-semibold">
-            {entryId === null ? "New entry" : "Edit entry"}
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold">
+              {entryId === null ? "New entry" : "Edit entry"}
+            </h2>
+            <span className="text-xs text-slate-500 dark:text-slate-500">
+              {!title.trim()
+                ? "Add a title to save"
+                : saveStatus === "saving"
+                ? "Saving…"
+                : saveStatus === "saved"
+                ? "Saved"
+                : saveStatus === "error"
+                ? "Save failed"
+                : null}
+            </span>
+          </div>
           <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
             {size !== "normal" && (
               <button
@@ -194,32 +252,7 @@ export default function EntryEditor({
               </div>
             </div>
 
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Notes</span>
-                <button
-                  type="button"
-                  onClick={() => setShowPreview((v) => !v)}
-                  className="rounded-md border border-slate-300 dark:border-slate-600 px-2 py-1 text-xs hover:bg-slate-200 dark:hover:bg-slate-700"
-                >
-                  {showPreview ? "Edit" : "Preview"}
-                </button>
-              </div>
-              {showPreview ? (
-                <div
-                  className="min-h-[8rem] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-900 p-3 text-sm"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(notes) }}
-                />
-              ) : (
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Markdown notes…"
-                  rows={6}
-                  className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-900 px-3 py-2 font-mono text-sm outline-none focus:border-sky-500"
-                />
-              )}
-            </div>
+            <NoteEditor value={notes} onChange={setNotes} />
 
             {error && (
               <p className="rounded bg-red-950/60 px-3 py-2 text-sm text-red-300">
@@ -235,14 +268,14 @@ export default function EntryEditor({
             onClick={onClose}
             className="rounded-md border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm hover:bg-slate-200 dark:hover:bg-slate-700"
           >
-            Cancel
+            Close
           </button>
           <button
             type="submit"
-            disabled={busy || loading}
+            disabled={busy || loading || !title.trim()}
             className="rounded-md bg-sky-600 px-4 py-2 text-sm hover:bg-sky-500 disabled:opacity-40"
           >
-            {busy ? "Saving…" : "Save"}
+            {busy ? "Saving…" : "Save & close"}
           </button>
         </div>
       </form>

@@ -155,3 +155,7 @@ export function exportPlaintext(
 ): Promise<void> {
   return invoke<void>("export_plaintext", { path, masterPassword });
 }
+
+export function openUrl(url: string): Promise<void> {
+  return invoke<void>("open_url", { url });
+}
