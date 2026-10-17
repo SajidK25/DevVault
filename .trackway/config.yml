@@ -1,0 +1,9 @@
+storePath: .trackway
+quietWindowMinutes: 15
+cacheRetentionDays: 30
+minSyncIntervalMinutes: 10
+adapters:
+  - claude-code
+  - codex
+  - opencode
+projectName: DevVault

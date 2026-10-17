@@ -56,6 +56,7 @@ pub fn run() {
             commands::export_encrypted,
             commands::import_encrypted,
             commands::export_plaintext,
+            commands::open_url,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

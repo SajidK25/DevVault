@@ -172,7 +172,10 @@ mod tests {
         let key = derive_key("right", &salt, test_params()).unwrap();
         let wrong = derive_key("wrong", &salt, test_params()).unwrap();
         let blob = encrypt(&key, b"data").unwrap();
-        assert!(matches!(decrypt(&wrong, &blob), Err(VaultError::BadPassword)));
+        assert!(matches!(
+            decrypt(&wrong, &blob),
+            Err(VaultError::BadPassword)
+        ));
     }
 
     #[test]

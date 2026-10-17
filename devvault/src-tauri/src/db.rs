@@ -428,7 +428,10 @@ pub fn search(conn: &Connection, query: &str) -> Result<Vec<SearchHit>> {
         return Ok(Vec::new());
     }
     // Escape LIKE wildcards in the user query, then wrap.
-    let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let escaped = q
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
     let pattern = format!("%{}%", escaped);
     let q_lower = q.to_lowercase();
 
@@ -544,8 +547,14 @@ pub fn search(conn: &Connection, query: &str) -> Result<Vec<SearchHit>> {
 
     // Stable-ish ordering: projects first, then entries by title.
     hits.sort_by(|a, b| {
-        let ka = (a.entry_id.is_some(), a.entry_title.clone().unwrap_or_default());
-        let kb = (b.entry_id.is_some(), b.entry_title.clone().unwrap_or_default());
+        let ka = (
+            a.entry_id.is_some(),
+            a.entry_title.clone().unwrap_or_default(),
+        );
+        let kb = (
+            b.entry_id.is_some(),
+            b.entry_title.clone().unwrap_or_default(),
+        );
         ka.cmp(&kb)
     });
     Ok(hits)

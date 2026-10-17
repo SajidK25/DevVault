@@ -100,7 +100,14 @@ pub fn create_project(
     let id = new_id();
     let now = now_string();
     let conn = state.db.lock().unwrap();
-    db::create_project(&conn, &id, &name, description.as_deref(), color.as_deref(), &now)?;
+    db::create_project(
+        &conn,
+        &id,
+        &name,
+        description.as_deref(),
+        color.as_deref(),
+        &now,
+    )?;
     Ok(Project {
         id,
         name,
@@ -123,7 +130,14 @@ pub fn update_project(
     ensure_unlocked(&state)?;
     let now = now_string();
     let conn = state.db.lock().unwrap();
-    db::update_project(&conn, &id, &name, description.as_deref(), color.as_deref(), &now)
+    db::update_project(
+        &conn,
+        &id,
+        &name,
+        description.as_deref(),
+        color.as_deref(),
+        &now,
+    )
 }
 
 #[tauri::command]
@@ -596,7 +610,8 @@ mod tests {
                 updated_at: "t".into(),
             };
             db::insert_entry(&mut conn, &row, &rows).unwrap();
-            conn.pragma_update(None, "wal_checkpoint", "TRUNCATE").unwrap();
+            conn.pragma_update(None, "wal_checkpoint", "TRUNCATE")
+                .unwrap();
 
             // Decrypt round-trip via the stored blobs.
             let frows = db::get_entry_fields(&conn, "e1").unwrap();
@@ -608,7 +623,10 @@ mod tests {
             let meta = db::list_entry_meta(&conn, "p1").unwrap();
             assert_eq!(meta.len(), 1);
             assert_eq!(meta[0].title, "Stripe prod");
-            assert_eq!(meta[0].tags, vec!["billing".to_string(), "prod".to_string()]);
+            assert_eq!(
+                meta[0].tags,
+                vec!["billing".to_string(), "prod".to_string()]
+            );
 
             // Project entry_count reflects the insert.
             let projs = db::list_projects(&conn).unwrap();
@@ -629,7 +647,10 @@ mod tests {
             "notes plaintext leaked to disk"
         );
         // ...but title and tags stay plaintext so search works without decrypt.
-        assert!(contains(&bytes, b"Stripe prod"), "title should be plaintext");
+        assert!(
+            contains(&bytes, b"Stripe prod"),
+            "title should be plaintext"
+        );
         assert!(contains(&bytes, b"billing"), "tag should be plaintext");
 
         cleanup(&path);
@@ -682,7 +703,9 @@ mod tests {
             assert_eq!(db::search(&conn, "api key").unwrap()[0].matched_on, "field");
             // Project-name match (no entry).
             let proj = db::search(&conn, "acme").unwrap();
-            assert!(proj.iter().any(|h| h.matched_on == "project" && h.entry_id.is_none()));
+            assert!(proj
+                .iter()
+                .any(|h| h.matched_on == "project" && h.entry_id.is_none()));
 
             // Secret VALUE must never be found by search.
             assert!(db::search(&conn, "topsecret").unwrap().is_empty());
@@ -761,6 +784,61 @@ mod tests {
         cleanup(&live);
         cleanup(&empty);
     }
+
+    // --- validate_url tests ---------------------------------------------------
+
+    #[test]
+    fn rejects_file_url() {
+        let result = validate_url("file:///etc/passwd");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Only http"));
+    }
+
+    #[test]
+    fn rejects_javascript_url() {
+        assert!(validate_url("javascript:alert(1)").is_err());
+    }
+
+    #[test]
+    fn rejects_data_url() {
+        assert!(validate_url("data:text/html,<h1>x</h1>").is_err());
+    }
+
+    #[test]
+    fn rejects_bare_path() {
+        assert!(validate_url("/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn rejects_empty_string() {
+        assert!(validate_url("").is_err());
+    }
+
+    #[test]
+    fn allows_http_url() {
+        assert!(validate_url("http://example.com").is_ok());
+    }
+
+    #[test]
+    fn allows_https_url() {
+        assert!(validate_url("https://example.com").is_ok());
+    }
+}
+
+// --- URL validation + open_url command --------------------------------------
+
+pub(crate) fn validate_url(url: &str) -> std::result::Result<(), String> {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        Ok(())
+    } else {
+        Err("Only http and https URLs are permitted.".into())
+    }
+}
+
+#[tauri::command]
+pub fn open_url(url: String) -> std::result::Result<(), String> {
+    validate_url(&url)?;
+    open::that(&url).map_err(|e| e.to_string())
 }
 
 // --- Testable implementations (no Tauri State wrapper) ---------------------

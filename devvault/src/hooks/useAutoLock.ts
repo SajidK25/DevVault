@@ -3,7 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // Spec §5: clear the in-memory key after N minutes idle (default 10) and on
 // window blur/minimize. Both are configurable here.
-const IDLE_MINUTES = 10;
+const IDLE_MINUTES = 60;
 // Lock-on-blur is off by default: many Linux window managers/compositors fire
 // spurious focus-change events, which would re-lock the vault constantly. Idle
 // auto-lock still applies. Flip to true if your environment is well-behaved.

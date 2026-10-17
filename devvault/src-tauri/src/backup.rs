@@ -121,19 +121,23 @@ pub fn restore_from(conn: &mut Connection, src: &Path) -> Result<()> {
     }
     // Validate without disturbing the live connection.
     {
-        let probe = Connection::open(src)
-            .map_err(|e| VaultError::Db(format!("open backup: {e}")))?;
+        let probe =
+            Connection::open(src).map_err(|e| VaultError::Db(format!("open backup: {e}")))?;
         let ok: bool = probe
-            .query_row(
-                "SELECT COUNT(*) FROM vault_meta",
-                [],
-                |r| r.get::<_, i64>(0).map(|n| n > 0),
-            )
+            .query_row("SELECT COUNT(*) FROM vault_meta", [], |r| {
+                r.get::<_, i64>(0).map(|n| n > 0)
+            })
             .map_err(|_| VaultError::Conflict("not a DevVault vault file".into()))?;
         if !ok {
-            return Err(VaultError::Conflict("vault file has no master record".into()));
+            return Err(VaultError::Conflict(
+                "vault file has no master record".into(),
+            ));
         }
     }
-    conn.restore(DatabaseName::Main, src, None::<fn(rusqlite::backup::Progress)>)
-        .map_err(|e| VaultError::Db(format!("restore: {e}")))
+    conn.restore(
+        DatabaseName::Main,
+        src,
+        None::<fn(rusqlite::backup::Progress)>,
+    )
+    .map_err(|e| VaultError::Db(format!("restore: {e}")))
 }

@@ -1,0 +1,4 @@
+# Trackway: derived index, rebuildable from records
+index.sqlite
+index.sqlite-shm
+index.sqlite-wal
